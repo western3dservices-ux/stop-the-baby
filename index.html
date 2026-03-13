@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stop The Baby!</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes crawl {
+      0%, 100% { transform: rotate(-12deg) translateY(0px); }
+      50% { transform: rotate(12deg) translateY(-4px); }
+    }
+    .animate-crawl {
+      animation: crawl 0.6s infinite ease-in-out;
+    }
+    
+    /* Staircase background */
+    .stairs-bg {
+      background-image: repeating-linear-gradient(0deg, #c2956e 0px, #c2956e 40px, #a87b51 40px, #a87b51 50px);
+      background-size: 100% 50px;
+    }
+    
+    /* Prevent default touch actions like scrolling while playing */
+    body {
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-900 flex items-center justify-center font-sans overflow-hidden select-none">
+
+  <!-- Main Game Container -->
+  <div class="relative w-full max-w-md h-[100dvh] sm:h-[800px] bg-slate-800 sm:rounded-2xl sm:shadow-2xl overflow-hidden border-x-4 sm:border-4 border-slate-700 flex flex-col">
+    
+    <!-- Top HUD -->
+    <div class="relative z-20 flex justify-between items-center p-4 bg-slate-900/90 text-white shadow-md border-b-4 border-slate-950">
+      <div class="flex flex-col">
+        <span class="text-sm text-slate-400 font-bold uppercase tracking-wider">Score</span>
+        <span id="score-display" class="text-3xl font-black text-amber-400">0</span>
+      </div>
+      
+      <div class="flex space-x-1" id="lives-container">
+        <!-- Hearts injected by JS -->
+      </div>
+    </div>
+
+    <!-- Game Area -->
+    <div class="relative flex-grow overflow-hidden bg-orange-900">
+      
+      <!-- Staircase Background -->
+      <div class="absolute inset-0 z-0 stairs-bg"></div>
+
+      <!-- Danger Zone -->
+      <div class="absolute top-0 left-0 w-full h-12 bg-red-500/20 border-b-2 border-red-500/50 flex items-center justify-center z-10">
+        <div class="flex items-center space-x-2 text-red-900/80 font-bold text-sm tracking-widest">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          <span>DANGER ZONE (OPEN DOOR)</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+      </div>
+
+      <!-- Damage Flash -->
+      <div id="damage-flash" class="absolute inset-0 bg-red-500 z-50 pointer-events-none transition-opacity duration-150 opacity-0 hidden"></div>
+
+      <!-- Playing state specific elements -->
+      <div id="playing-area" class="absolute inset-0 z-10 hidden">
+        <!-- Lane dividers -->
+        <div class="absolute inset-0 flex w-full">
+          <div class="flex-1 border-r border-white/5"></div>
+          <div class="flex-1 border-r border-white/5"></div>
+          <div class="flex-1 border-r border-white/5"></div>
+          <div class="flex-1"></div>
+        </div>
+
+        <!-- Container for active babies -->
+        <div id="baby-container" class="absolute inset-0"></div>
+      </div>
+
+      <!-- Main Menu Overlay -->
+      <div id="menu-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-6 text-center">
+        <div class="text-8xl mb-4 animate-bounce">👶</div>
+        <h1 class="text-4xl sm:text-5xl font-black text-white mb-2 tracking-tight">STOP THE <span class="text-amber-400">BABY!</span></h1>
+        <p class="text-slate-300 mb-8 max-w-xs">
+          They are crawling up the stairs! Tap or click the babies to pick them up before they reach the top.
+        </p>
+        
+        <button onclick="startGame()" class="group relative px-8 py-4 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black text-xl rounded-full shadow-[0_8px_0_#92400e] active:shadow-[0_0px_0_#92400e] active:translate-y-2 transition-all flex items-center space-x-3">
+          <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <span>PLAY NOW</span>
+        </button>
+      </div>
+
+      <!-- Game Over Overlay -->
+      <div id="gameover-screen" class="absolute inset-0 z-50 hidden flex-col items-center justify-center bg-slate-900/90 backdrop-blur-md p-6 text-center">
+        <h2 class="text-5xl font-black text-red-500 mb-2">OH NO!</h2>
+        <p class="text-xl text-slate-300 mb-8">A baby made it to the top!</p>
+        
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-xs mb-8 border-2 border-slate-700 shadow-xl">
+          <div class="text-slate-400 font-bold uppercase tracking-wider text-sm mb-1">Final Score</div>
+          <div id="final-score" class="text-5xl font-black text-white mb-6">0</div>
+          
+          <div class="h-px w-full bg-slate-700 mb-6"></div>
+          
+          <div class="flex items-center justify-center space-x-2 text-amber-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+            <span class="font-bold uppercase tracking-wider text-sm">Best: <span id="high-score">0</span></span>
+          </div>
+        </div>
+
+        <button onclick="startGame()" class="group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xl rounded-full shadow-[0_8px_0_#065f46] active:shadow-[0_0px_0_#065f46] active:translate-y-2 transition-all flex items-center space-x-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>PLAY AGAIN</span>
+        </button>
+      </div>
+
+    </div>
+    <!-- Bottom Baseboard -->
+    <div class="h-4 bg-slate-900 z-20"></div>
+  </div>
+
+  <script>
+    // Game State variables
+    let gameState = 'menu'; // menu, playing, gameover
+    let score = 0;
+    let lives = 3;
+    let highScore = 0;
+    let babies = [];
+    
+    // Time & Loop variables
+    let timeElapsed = 0;
+    let nextSpawnTime = 800;
+    let difficulty = 1;
+    let lastTime = 0;
+    let animationFrameId = null;
+
+    // DOM Elements
+    const elScore = document.getElementById('score-display');
+    const elLives = document.getElementById('lives-container');
+    const elMenu = document.getElementById('menu-screen');
+    const elGameover = document.getElementById('gameover-screen');
+    const elPlaying = document.getElementById('playing-area');
+    const elBabyContainer = document.getElementById('baby-container');
+    const elFinalScore = document.getElementById('final-score');
+    const elHighScore = document.getElementById('high-score');
+    const elDamageFlash = document.getElementById('damage-flash');
+
+    // SVG String for a Heart
+    const heartSVG = (isFull) => `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
+        class="w-8 h-8 transition-colors duration-300 ${isFull ? 'text-red-500 fill-red-500' : 'text-slate-700 fill-slate-700'}">
+        <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+      </svg>
+    `;
+
+    function updateHUD() {
+      elScore.innerText = score;
+      elLives.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        elLives.innerHTML += heartSVG(i < lives);
+      }
+    }
+
+    function triggerDamageFlash() {
+      elDamageFlash.classList.remove('hidden');
+      // Using a tiny timeout to allow display:block to apply before changing opacity
+      setTimeout(() => elDamageFlash.classList.replace('opacity-0', 'opacity-40'), 10);
+      setTimeout(() => {
+        elDamageFlash.classList.replace('opacity-40', 'opacity-0');
+        setTimeout(() => elDamageFlash.classList.add('hidden'), 150);
+      }, 150);
+    }
+
+    function catchBaby(id) {
+      if (gameState !== 'playing') return;
+
+      const index = babies.findIndex(b => b.id === id);
+      if (index > -1) {
+        // Remove element from DOM
+        if(babies[index].el) {
+          babies[index].el.remove();
+        }
+        
+        // Remove from array and update score
+        babies.splice(index, 1);
+        score += 10;
+        
+        if (score > highScore) {
+          highScore = score;
+        }
+        
+        updateHUD();
+      }
+    }
+
+    function spawnBaby() {
+      const lane = Math.floor(Math.random() * 4);
+      const baseSpeed = 0.006; 
+      const speedVar = 0.003 * Math.random();
+      const speed = (baseSpeed + speedVar) * difficulty;
+      const id = Math.random().toString(36).substr(2, 9);
+      
+      // Create DOM element
+      const babyEl = document.createElement('div');
+      babyEl.className = 'absolute w-1/4 h-20 flex justify-center items-center touch-none';
+      babyEl.style.left = `${lane * 25}%`;
+      babyEl.style.bottom = '0%';
+      
+      const innerEl = document.createElement('div');
+      innerEl.className = 'relative cursor-pointer pointer-events-auto transform hover:scale-110 active:scale-95 transition-transform drop-shadow-[0_10px_8px_rgba(0,0,0,0.5)]';
+      innerEl.innerHTML = '<div class="text-5xl sm:text-6xl animate-crawl select-none pointer-events-none">👶</div>';
+      
+      // Handle click/touch directly
+      innerEl.onpointerdown = (e) => {
+        e.preventDefault();
+        catchBaby(id);
+      };
+
+      babyEl.appendChild(innerEl);
+      elBabyContainer.appendChild(babyEl);
+
+      babies.push({ id, el: babyEl, lane, progress: 0, speed });
+    }
+
+    function gameLoop(timestamp) {
+      if (gameState !== 'playing') return;
+
+      if (!lastTime) lastTime = timestamp;
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+
+      timeElapsed += deltaTime;
+
+      // 1. Update Difficulty
+      difficulty = 1 + Math.floor(timeElapsed / 10000) * 0.15;
+
+      // 2. Spawn Babies
+      if (timeElapsed > nextSpawnTime) {
+        spawnBaby();
+        const spawnDelay = Math.max(350, 1500 - (difficulty * 250));
+        nextSpawnTime = timeElapsed + spawnDelay + (Math.random() * 400);
+      }
+
+      // 3. Move Babies & Check Collisions
+      let lifeLostThisFrame = false;
+      for (let i = babies.length - 1; i >= 0; i--) {
+        const baby = babies[i];
+        baby.progress += baby.speed * deltaTime;
+
+        if (baby.progress >= 100) {
+          // Reached top
+          if(baby.el) baby.el.remove();
+          babies.splice(i, 1);
+          lives -= 1;
+          lifeLostThisFrame = true;
+        } else {
+          // Update position in DOM
+          baby.el.style.bottom = `${baby.progress}%`;
+        }
+      }
+
+      if (lifeLostThisFrame) {
+        triggerDamageFlash();
+        updateHUD();
+      }
+
+      // 4. Check Game Over
+      if (lives <= 0) {
+        endGame();
+        return;
+      }
+
+      // 5. Request next frame
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      // Reset State
+      gameState = 'playing';
+      score = 0;
+      lives = 3;
+      timeElapsed = 0;
+      nextSpawnTime = 500;
+      difficulty = 1;
+      lastTime = 0;
+      
+      // Clear existing babies from DOM and array
+      elBabyContainer.innerHTML = '';
+      babies = [];
+
+      // Update UI Views
+      elMenu.classList.add('hidden');
+      elGameover.classList.replace('flex', 'hidden');
+      elPlaying.classList.remove('hidden');
+      
+      updateHUD();
+
+      // Start Loop
+      if(animationFrameId) cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      gameState = 'gameover';
+      if(animationFrameId) cancelAnimationFrame(animationFrameId);
+      
+      // Update UI Views
+      elPlaying.classList.add('hidden');
+      elGameover.classList.replace('hidden', 'flex');
+      
+      elFinalScore.innerText = score;
+      elHighScore.innerText = highScore;
+    }
+
+    // Initialize HUD on load
+    updateHUD();
+
+  </script>
+</body>
+</html>
